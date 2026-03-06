@@ -5,7 +5,8 @@ import Nav from '@/components/nav'
 import DispositionBadge from '@/components/disposition-badge'
 import type { DispositionType } from '@/lib/types'
 import Link from 'next/link'
-import { Play, RefreshCw, CheckCircle, Clock, Loader2, AlertTriangle, Search } from 'lucide-react'
+import { Play, RefreshCw, CheckCircle, Clock, Loader2, AlertTriangle, Search, Timer } from 'lucide-react'
+import { formatDistanceToNow } from 'date-fns'
 
 interface QueueSurvey {
   qb_record_id: number
@@ -186,6 +187,7 @@ export default function QueuePage() {
                     <th className="text-left py-3 px-4">Customer</th>
                     <th className="text-left py-3 px-4">State</th>
                     <th className="text-left py-3 px-4">QB Status</th>
+                    <th className="text-left py-3 px-4">Submitted</th>
                     <th className="text-left py-3 px-4">Review Status</th>
                     <th className="text-left py-3 px-4">Result</th>
                     <th className="text-right py-3 px-4">Action</th>
@@ -202,6 +204,22 @@ export default function QueuePage() {
                         <td className="py-3 px-4 text-[#888]">{s.state || '—'}</td>
                         <td className="py-3 px-4">
                           <span className="tag">{s.survey_status}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {s.survey_submitted_date ? (() => {
+                            const submitted = new Date(s.survey_submitted_date)
+                            const ago = formatDistanceToNow(submitted, { addSuffix: true })
+                            const hoursAgo = (Date.now() - submitted.getTime()) / (1000 * 60 * 60)
+                            const ageColor = hoursAgo > 48 ? '#ef4444' : hoursAgo > 24 ? '#f59e0b' : '#555'
+                            return (
+                              <div className="flex flex-col">
+                                <span className="text-xs text-[#888]">{submitted.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                <span className="text-[10px] font-medium flex items-center gap-1" style={{ color: ageColor }}>
+                                  <Timer size={9} />{ago}
+                                </span>
+                              </div>
+                            )
+                          })() : <span className="text-[#333]">—</span>}
                         </td>
                         <td className="py-3 px-4">
                           <span
