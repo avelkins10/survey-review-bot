@@ -12,12 +12,21 @@ interface QueueSurvey {
   qb_record_id: number
   customer_name: string
   state: string | null
+  survey_approval: string | null
   project_status: string | null
   arrivy_task_id: string | null
   survey_submitted_date: string | null
   review_status: 'not_reviewed' | 'reviewed' | 'queued' | 'running'
   review_id: number | null
   disposition: string | null
+}
+
+const APPROVAL_BADGE: Record<string, { icon: string; color: string; bg: string }> = {
+  Approved: { icon: '✅', color: '#4ade80', bg: '#14532d' },
+  Submitted: { icon: '⏳', color: '#fbbf24', bg: '#92400e' },
+  Scheduled: { icon: '📅', color: '#60a5fa', bg: '#1e3a5f' },
+  Rejected: { icon: '❌', color: '#f87171', bg: '#991b1b' },
+  Declined: { icon: '❌', color: '#f87171', bg: '#991b1b' },
 }
 
 const STATUS_CONFIG = {
@@ -207,6 +216,7 @@ export default function QueuePage() {
                   <tr className="border-b border-[#222] text-[10px] uppercase tracking-[2px] text-[#555]">
                     <th className="text-left py-3 px-4">Project</th>
                     <th className="text-left py-3 px-4">Customer</th>
+                    <th className="text-left py-3 px-4">Survey</th>
                     <th className="text-left py-3 px-4">State</th>
                     <th className="text-left py-3 px-4">Project Status</th>
                     <th className="text-left py-3 px-4">Submitted</th>
@@ -223,6 +233,16 @@ export default function QueuePage() {
                       <tr key={s.qb_record_id} className="border-b border-[#1a1a1a] hover:bg-[#1a1a1a] transition-colors">
                         <td className="py-3 px-4 font-mono text-xs text-[#f97316]">#{s.qb_record_id}</td>
                         <td className="py-3 px-4 font-medium">{s.customer_name}</td>
+                        <td className="py-3 px-4">
+                          {(() => {
+                            const ab = APPROVAL_BADGE[s.survey_approval || ''] || { icon: '—', color: '#555', bg: '#1a1a1a' }
+                            return (
+                              <span className="badge gap-1" style={{ background: ab.bg, color: ab.color }}>
+                                {ab.icon} {s.survey_approval || 'Unknown'}
+                              </span>
+                            )
+                          })()}
+                        </td>
                         <td className="py-3 px-4 text-[#888]">{s.state || '—'}</td>
                         <td className="py-3 px-4">
                           {s.project_status ? (

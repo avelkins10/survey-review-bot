@@ -22,6 +22,7 @@ const QB_FID = {
 }
 
 interface QBSurvey {
+  survey_approval: string | null
   qb_record_id: number
   customer_name: string
   state: string | null
@@ -110,6 +111,7 @@ export async function GET(req: NextRequest) {
 
       return {
         qb_record_id: qbId,
+        survey_approval: r[String(QB_FID.survey_status)]?.value ? String(r[String(QB_FID.survey_status)]?.value) : null,
         customer_name: String(r[String(QB_FID.customer_name)]?.value || 'Unknown'),
         state: r[String(QB_FID.state)]?.value ? String(r[String(QB_FID.state)]?.value) : null,
         project_status: r[String(QB_FID.project_status)]?.value ? String(r[String(QB_FID.project_status)]?.value) : null,
