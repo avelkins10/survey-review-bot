@@ -17,7 +17,7 @@ const QB_FID = {
   survey_status: 162,
   survey_submitted_date: 164,
   state: 189,
-  project_status: 347,
+  project_status: 255,
   arrivy_task_id: 2685,
 }
 
