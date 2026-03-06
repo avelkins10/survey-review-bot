@@ -82,15 +82,15 @@ export async function GET(req: NextRequest) {
       (reviews || []).map(r => [r.qb_record_id, r])
     )
 
-    // 3. Get queue status
-    const { data: queued } = await sb
-      .from('analysis_queue')
-      .select('qb_record_id, status')
+    // 3. Get queue status from surveys table
+    const { data: queuedSurveys } = await sb
+      .from('surveys')
+      .select('qb_record_id, survey_status')
       .in('qb_record_id', qbIds)
-      .in('status', ['pending', 'running'])
+      .eq('survey_status', 'queued_for_analysis')
 
     const queueMap = new Map(
-      (queued || []).map(q => [q.qb_record_id, q.status])
+      (queuedSurveys || []).map(q => [q.qb_record_id, 'pending'])
     )
 
     // 4. Build response
@@ -100,8 +100,7 @@ export async function GET(req: NextRequest) {
       const queueStatus = queueMap.get(qbId)
 
       let reviewStatus: QBSurvey['review_status'] = 'not_reviewed'
-      if (queueStatus === 'running') reviewStatus = 'running'
-      else if (queueStatus === 'pending') reviewStatus = 'queued'
+      if (queueStatus === 'pending') reviewStatus = 'queued'
       else if (review) reviewStatus = 'reviewed'
 
       return {

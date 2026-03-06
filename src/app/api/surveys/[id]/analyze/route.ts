@@ -6,7 +6,8 @@ const sb = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// POST /api/surveys/[id]/analyze — queue a survey for analysis
+// POST /api/surveys/[id]/analyze — upsert survey record + mark for analysis
+// Uses the existing surveys table (survey_status = 'queued_for_analysis')
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -21,50 +22,42 @@ export async function POST(
   try {
     const body = await req.json().catch(() => ({}))
 
-    // Check if already queued
-    const { data: existing } = await sb
-      .from('analysis_queue')
-      .select('id, status')
+    // Check if already reviewed
+    const { data: existingReview } = await sb
+      .from('reviews')
+      .select('id')
       .eq('qb_record_id', qbRecordId)
-      .in('status', ['pending', 'running'])
       .limit(1)
 
-    if (existing?.length) {
+    if (existingReview?.length) {
       return NextResponse.json({
-        status: 'already_queued',
-        queue_id: existing[0].id,
-        message: `Survey #${qbRecordId} is already ${existing[0].status}`,
+        status: 'already_reviewed',
+        review_id: existingReview[0].id,
+        message: `Survey #${qbRecordId} already has a review`,
       })
     }
 
-    // Insert into queue
+    // Upsert into surveys table with status = 'queued_for_analysis'
     const { data, error } = await sb
-      .from('analysis_queue')
-      .insert({
+      .from('surveys')
+      .upsert({
         qb_record_id: qbRecordId,
         customer_name: body.customer_name || 'Unknown',
         state: body.state || null,
         arrivy_task_id: body.arrivy_task_id || null,
-        status: 'pending',
-        requested_by: 'dashboard',
-      })
+        survey_status: 'queued_for_analysis',
+      }, { onConflict: 'qb_record_id' })
       .select('id')
       .single()
 
     if (error) {
-      // If table doesn't exist yet, return helpful message
-      if (error.code === '42P01') {
-        return NextResponse.json({
-          error: 'Queue table not created yet. Run supabase-queue.sql in the Supabase Dashboard.',
-        }, { status: 503 })
-      }
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json({
       status: 'queued',
-      queue_id: data!.id,
-      message: `Survey #${qbRecordId} queued for analysis`,
+      survey_id: data!.id,
+      message: `Survey #${qbRecordId} queued for analysis. Run the bot on the Mac mini to process it.`,
     })
   } catch (e: unknown) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
