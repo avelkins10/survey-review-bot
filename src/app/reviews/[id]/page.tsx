@@ -7,6 +7,7 @@ import DispositionBadge from '@/components/disposition-badge'
 import type { Review, PhotoResult, Feedback, DispositionType } from '@/lib/types'
 import { ArrowLeft, ExternalLink, Camera, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import Link from 'next/link'
+import PhotoAnnotator from '@/components/photo-annotator'
 
 const CATEGORY_LABELS: Record<string, string> = {
   panel_sticker: 'Panel Sticker', main_breaker: 'Main Breaker', utility_meter: 'Utility Meter',
@@ -29,6 +30,7 @@ export default function ReviewDetail() {
   const [review, setReview] = useState<Review | null>(null)
   const [photos, setPhotos] = useState<PhotoResult[]>([])
   const [feedback, setFeedback] = useState<Feedback[]>([])
+  const [annotations, setAnnotations] = useState<Record<number, { id?: number; verdict: string | null; bounding_boxes: unknown[]; notes: string | null }>>({})
   const [loading, setLoading] = useState(true)
 
   // Feedback form
@@ -47,6 +49,15 @@ export default function ReviewDetail() {
       setPhotos(d.photos || [])
       setFeedback(d.feedback || [])
       setLoading(false)
+
+      // Load annotations
+      fetch(`/api/annotations?review_id=${id}`).then(r => r.json()).then(anns => {
+        const map: Record<number, typeof annotations[number]> = {}
+        for (const a of anns) {
+          map[a.photo_result_id] = a
+        }
+        setAnnotations(map)
+      }).catch(() => {})
     }).catch(() => setLoading(false))
   }, [id])
 
@@ -177,6 +188,46 @@ export default function ReviewDetail() {
           </div>
         </div>
 
+        {/* HITL Training Progress */}
+        {Object.keys(annotations).length > 0 && (
+          <div className="card p-5 mb-8">
+            <h3 className="text-[10px] uppercase tracking-[2px] text-[#f97316] mb-3">Training Progress</h3>
+            <div className="grid grid-cols-4 gap-4">
+              <div>
+                <div className="text-2xl font-bold text-[#60a5fa]">{Object.keys(annotations).length}</div>
+                <div className="text-[10px] text-[#555]">Annotated</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-[#22c55e]">
+                  {Object.values(annotations).filter(a => a.verdict === 'accept').length}
+                </div>
+                <div className="text-[10px] text-[#555]">Accepted</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-[#ef4444]">
+                  {Object.values(annotations).filter(a => a.verdict === 'decline').length}
+                </div>
+                <div className="text-[10px] text-[#555]">Declined</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-[#f97316]">
+                  {Object.values(annotations).reduce((sum, a) => sum + ((a.bounding_boxes as unknown[])?.length || 0), 0)}
+                </div>
+                <div className="text-[10px] text-[#555]">Bounding Boxes</div>
+              </div>
+            </div>
+            <div className="mt-3 bg-[#0a0a0a] rounded-full h-2 overflow-hidden">
+              <div
+                className="h-full bg-[#f97316] transition-all"
+                style={{ width: `${Math.min(100, (Object.keys(annotations).length / photos.length) * 100)}%` }}
+              />
+            </div>
+            <div className="text-[10px] text-[#555] mt-1">
+              {Object.keys(annotations).length}/{photos.length} photos reviewed
+            </div>
+          </div>
+        )}
+
         {/* Quality flags */}
         {review.quality_flags?.length > 0 && (
           <div className="card p-5 mb-8">
@@ -206,26 +257,28 @@ export default function ReviewDetail() {
                   </div>
                   <span className="text-[10px] text-[#555]">{catPhotos.length} photo{catPhotos.length > 1 ? 's' : ''}</span>
                 </div>
-                <div className="p-4 space-y-3">
+                <div className="p-4 space-y-4">
                   {catPhotos.map((p) => (
                     <div key={p.id} className="text-xs space-y-2">
-                      {/* Photo image */}
-                      {p.photo_url ? (
-                        <a href={`/api/photos?url=${encodeURIComponent(p.photo_url)}`} target="_blank" rel="noopener noreferrer" className="block">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={`/api/photos?url=${encodeURIComponent(p.photo_url)}`}
-                            alt={`${catLabel(cat)} #${p.photo_index}`}
-                            className="w-full rounded-lg border border-[#222] hover:border-[#f97316] transition-colors cursor-pointer"
-                            style={{ maxHeight: 240, objectFit: 'cover' }}
-                            loading="lazy"
-                          />
-                        </a>
-                      ) : (
-                        <div className="w-full h-24 bg-[#0a0a0a] rounded-lg border border-[#222] flex items-center justify-center">
-                          <Camera size={20} className="text-[#333]" />
-                        </div>
-                      )}
+                      {/* Photo with HITL annotation controls */}
+                      <PhotoAnnotator
+                        photoResultId={p.id}
+                        reviewId={Number(id)}
+                        photoUrl={p.photo_url}
+                        categoryKey={p.category_key}
+                        categoryLabel={catLabel(cat)}
+                        qualityScore={p.vision_skipped ? null : p.quality_score}
+                        initialAnnotation={annotations[p.id] ? {
+                          photo_result_id: p.id,
+                          review_id: Number(id),
+                          verdict: annotations[p.id].verdict as 'accept' | 'decline' | null,
+                          bounding_boxes: annotations[p.id].bounding_boxes as { x: number; y: number; width: number; height: number; label: string; type: 'highlight' | 'issue' }[],
+                          notes: annotations[p.id].notes,
+                        } : null}
+                        onSaved={(ann) => setAnnotations(prev => ({ ...prev, [p.id]: ann }))}
+                      />
+
+                      {/* AI analysis badges */}
                       <div className="flex items-center gap-2">
                         {p.vision_skipped ? (
                           <span className="tag">Site photo (no vision)</span>
