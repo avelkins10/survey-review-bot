@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Nav from '@/components/nav'
 import DispositionBadge from '@/components/disposition-badge'
 import type { DispositionType } from '@/lib/types'
@@ -12,7 +12,6 @@ interface QueueSurvey {
   qb_record_id: number
   customer_name: string
   state: string | null
-  survey_status: string
   project_status: string | null
   arrivy_task_id: string | null
   survey_submitted_date: string | null
@@ -23,39 +22,51 @@ interface QueueSurvey {
 
 const STATUS_CONFIG = {
   not_reviewed: { label: 'Awaiting Review', color: '#555', bg: '#1a1a1a', icon: Clock },
-  queued: { label: 'Queued', color: '#f59e0b', bg: '#92400e', icon: Clock },
+  queued: { label: 'Queued — waiting for bot', color: '#f59e0b', bg: '#92400e', icon: Clock },
   running: { label: 'Analyzing...', color: '#60a5fa', bg: '#1e3a5f', icon: Loader2 },
-  reviewed: { label: 'Reviewed', color: '#22c55e', bg: '#14532d', icon: CheckCircle },
+  reviewed: { label: 'Complete', color: '#22c55e', bg: '#14532d', icon: CheckCircle },
 }
 
 export default function QueuePage() {
   const [surveys, setSurveys] = useState<QueueSurvey[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [filter, setFilter] = useState('Submitted')
   const [projStatusFilter, setProjStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [triggeringId, setTriggeringId] = useState<number | null>(null)
+  const pollRef = useRef<NodeJS.Timeout | null>(null)
 
-  const fetchSurveys = useCallback(async () => {
-    setLoading(true)
+  const fetchSurveys = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
     setError('')
     try {
-      const resp = await fetch(`/api/surveys?status=${filter}&limit=100`)
+      const resp = await fetch('/api/surveys?status=all&limit=100')
       if (!resp.ok) {
         const data = await resp.json()
         setError(data.error || 'Failed to load surveys')
         setSurveys([])
       } else {
-        setSurveys(await resp.json())
+        const data = await resp.json()
+        setSurveys(data)
+        // Auto-poll if any surveys are queued/running
+        const hasActive = data.some((s: QueueSurvey) => s.review_status === 'queued' || s.review_status === 'running')
+        if (hasActive && !pollRef.current) {
+          pollRef.current = setInterval(() => fetchSurveys(false), 10000)
+        } else if (!hasActive && pollRef.current) {
+          clearInterval(pollRef.current)
+          pollRef.current = null
+        }
       }
     } catch {
       setError('Network error')
     }
-    setLoading(false)
-  }, [filter])
+    if (showLoading) setLoading(false)
+  }, [])
 
-  useEffect(() => { fetchSurveys() }, [fetchSurveys])
+  useEffect(() => {
+    fetchSurveys()
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [fetchSurveys])
 
   async function triggerAnalysis(survey: QueueSurvey) {
     setTriggeringId(survey.qb_record_id)
@@ -70,11 +81,16 @@ export default function QueuePage() {
         }),
       })
       const data = await resp.json()
-      if (data.status === 'queued' || data.status === 'already_queued') {
-        // Refresh to show updated status
-        await fetchSurveys()
-      } else if (data.error) {
+      if (data.error) {
         setError(data.error)
+      }
+      // Immediately update local state to show "queued"
+      setSurveys(prev => prev.map(s =>
+        s.qb_record_id === survey.qb_record_id ? { ...s, review_status: 'queued' as const } : s
+      ))
+      // Start polling
+      if (!pollRef.current) {
+        pollRef.current = setInterval(() => fetchSurveys(false), 10000)
       }
     } catch {
       setError('Failed to trigger analysis')
@@ -82,7 +98,7 @@ export default function QueuePage() {
     setTriggeringId(null)
   }
 
-  // Collect unique project statuses for the dropdown
+  // Unique project statuses for filter
   const projectStatuses = Array.from(new Set(surveys.map(s => s.project_status).filter(Boolean) as string[])).sort()
 
   const filtered = surveys.filter(s => {
@@ -100,7 +116,7 @@ export default function QueuePage() {
   const counts = {
     total: surveys.length,
     awaiting: surveys.filter(s => s.review_status === 'not_reviewed').length,
-    queued: surveys.filter(s => s.review_status === 'queued' || s.review_status === 'running').length,
+    active: surveys.filter(s => s.review_status === 'queued' || s.review_status === 'running').length,
     reviewed: surveys.filter(s => s.review_status === 'reviewed').length,
   }
 
@@ -113,9 +129,12 @@ export default function QueuePage() {
             <h1 className="text-2xl font-bold mb-1">
               Survey <span className="text-[#f97316]">Queue</span>
             </h1>
-            <p className="text-xs text-[#555]">Site surveys from QuickBase · Click &quot;Run Analysis&quot; to trigger AI review</p>
+            <p className="text-xs text-[#555]">
+              Site surveys from QuickBase · Click &quot;Run Analysis&quot; to trigger AI review
+              {counts.active > 0 && <span className="text-[#60a5fa] ml-2">⟳ Auto-refreshing ({counts.active} active)</span>}
+            </p>
           </div>
-          <button onClick={fetchSurveys} className="btn-ghost inline-flex items-center gap-1.5 text-xs">
+          <button onClick={() => fetchSurveys()} className="btn-ghost inline-flex items-center gap-1.5 text-xs">
             <RefreshCw size={12} /> Refresh
           </button>
         </div>
@@ -131,8 +150,8 @@ export default function QueuePage() {
             <div className="text-2xl font-bold text-[#f59e0b]">{counts.awaiting}</div>
           </div>
           <div className="stat-card">
-            <div className="text-[10px] uppercase tracking-[2px] text-[#555] mb-1">In Queue</div>
-            <div className="text-2xl font-bold text-[#818cf8]">{counts.queued}</div>
+            <div className="text-[10px] uppercase tracking-[2px] text-[#555] mb-1">In Progress</div>
+            <div className="text-2xl font-bold text-[#818cf8]">{counts.active}</div>
           </div>
           <div className="stat-card">
             <div className="text-[10px] uppercase tracking-[2px] text-[#555] mb-1">Reviewed</div>
@@ -140,27 +159,12 @@ export default function QueuePage() {
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Filters — only project status + search */}
         <div className="flex items-center gap-3 mb-4">
-          <div className="flex items-center gap-1">
-            {['Submitted', 'Approved', 'Scheduled', 'all'].map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                  filter === f
-                    ? 'bg-[#f97316]/10 text-[#f97316] border border-[#f97316]/30'
-                    : 'text-[#555] border border-[#222] hover:border-[#444]'
-                }`}
-              >
-                {f === 'all' ? 'All' : f}
-              </button>
-            ))}
-          </div>
           <select
             value={projStatusFilter}
             onChange={e => setProjStatusFilter(e.target.value)}
-            className="text-xs py-1.5 px-2 ml-2"
+            className="text-xs py-1.5 px-2"
           >
             <option value="all">All Project Statuses</option>
             {projectStatuses.map(ps => (
@@ -172,13 +176,12 @@ export default function QueuePage() {
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
-              placeholder="Search by name, ID, or state..."
+              placeholder="Search by name, ID, state, or status..."
               className="w-full pl-8 py-1.5 text-xs"
             />
           </div>
         </div>
 
-        {/* Error */}
         {error && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-red-900/20 border border-red-900/50 text-red-300 text-sm mb-4">
             <AlertTriangle size={14} /> {error}
@@ -205,10 +208,9 @@ export default function QueuePage() {
                     <th className="text-left py-3 px-4">Project</th>
                     <th className="text-left py-3 px-4">Customer</th>
                     <th className="text-left py-3 px-4">State</th>
-                    <th className="text-left py-3 px-4">QB Status</th>
                     <th className="text-left py-3 px-4">Project Status</th>
                     <th className="text-left py-3 px-4">Submitted</th>
-                    <th className="text-left py-3 px-4">Review Status</th>
+                    <th className="text-left py-3 px-4">Analysis</th>
                     <th className="text-left py-3 px-4">Result</th>
                     <th className="text-right py-3 px-4">Action</th>
                   </tr>
@@ -222,9 +224,6 @@ export default function QueuePage() {
                         <td className="py-3 px-4 font-mono text-xs text-[#f97316]">#{s.qb_record_id}</td>
                         <td className="py-3 px-4 font-medium">{s.customer_name}</td>
                         <td className="py-3 px-4 text-[#888]">{s.state || '—'}</td>
-                        <td className="py-3 px-4">
-                          <span className="tag">{s.survey_status}</span>
-                        </td>
                         <td className="py-3 px-4">
                           {s.project_status ? (
                             <span className="tag">{s.project_status}</span>
@@ -247,11 +246,8 @@ export default function QueuePage() {
                           })() : <span className="text-[#333]">—</span>}
                         </td>
                         <td className="py-3 px-4">
-                          <span
-                            className="badge gap-1"
-                            style={{ background: sc.bg, color: sc.color }}
-                          >
-                            <Icon size={10} className={s.review_status === 'running' ? 'animate-spin' : ''} />
+                          <span className="badge gap-1" style={{ background: sc.bg, color: sc.color }}>
+                            <Icon size={10} className={s.review_status === 'running' || s.review_status === 'queued' ? 'animate-spin' : ''} />
                             {sc.label}
                           </span>
                         </td>
@@ -277,13 +273,14 @@ export default function QueuePage() {
                                 <><Play size={11} /> Run Analysis</>
                               )}
                             </button>
-                          ) : s.review_status === 'queued' ? (
-                            <span className="text-xs text-[#f59e0b]">In queue</span>
-                          ) : s.review_status === 'running' ? (
-                            <span className="text-xs text-[#60a5fa]">Analyzing...</span>
+                          ) : s.review_status === 'queued' || s.review_status === 'running' ? (
+                            <div className="flex items-center gap-2 justify-end">
+                              <Loader2 size={12} className="animate-spin text-[#60a5fa]" />
+                              <span className="text-xs text-[#60a5fa]">Processing...</span>
+                            </div>
                           ) : s.review_status === 'reviewed' ? (
                             <Link href={`/reviews/${s.review_id}`} className="btn-ghost text-xs py-1.5 px-3">
-                              View
+                              View Results
                             </Link>
                           ) : !s.arrivy_task_id ? (
                             <span className="text-[10px] text-[#444]">No Arrivy ID</span>

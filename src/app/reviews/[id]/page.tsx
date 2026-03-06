@@ -208,10 +208,27 @@ export default function ReviewDetail() {
                 </div>
                 <div className="p-4 space-y-3">
                   {catPhotos.map((p) => (
-                    <div key={p.id} className="text-xs space-y-1">
+                    <div key={p.id} className="text-xs space-y-2">
+                      {/* Photo image */}
+                      {p.photo_url ? (
+                        <a href={`/api/photos?url=${encodeURIComponent(p.photo_url)}`} target="_blank" rel="noopener noreferrer" className="block">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`/api/photos?url=${encodeURIComponent(p.photo_url)}`}
+                            alt={`${catLabel(cat)} #${p.photo_index}`}
+                            className="w-full rounded-lg border border-[#222] hover:border-[#f97316] transition-colors cursor-pointer"
+                            style={{ maxHeight: 240, objectFit: 'cover' }}
+                            loading="lazy"
+                          />
+                        </a>
+                      ) : (
+                        <div className="w-full h-24 bg-[#0a0a0a] rounded-lg border border-[#222] flex items-center justify-center">
+                          <Camera size={20} className="text-[#333]" />
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
                         {p.vision_skipped ? (
-                          <span className="tag">Vision: pending</span>
+                          <span className="tag">Site photo (no vision)</span>
                         ) : (
                           <>
                             <span className="badge" style={{
