@@ -20,6 +20,10 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false })
 
   if (error) {
+    // Table doesn't exist yet — return empty gracefully
+    if (error.code === '42P01') {
+      return NextResponse.json([])
+    }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
@@ -35,6 +39,15 @@ export async function POST(req: NextRequest) {
 
     if (!photo_result_id || !review_id) {
       return NextResponse.json({ error: 'photo_result_id and review_id required' }, { status: 400 })
+    }
+
+    // Check if table exists first
+    const { error: tableCheck } = await sb.from('photo_annotations').select('id').limit(0)
+    if (tableCheck?.code === '42P01') {
+      return NextResponse.json({
+        error: 'photo_annotations table not created yet. Run migration SQL in Supabase Dashboard.',
+        migration_url: 'https://survey-review-bot.vercel.app/api/migrate',
+      }, { status: 503 })
     }
 
     // Upsert: check if annotation exists for this photo

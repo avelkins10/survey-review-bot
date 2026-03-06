@@ -33,6 +33,8 @@ interface QBSurvey {
   review_status: 'not_reviewed' | 'reviewed' | 'queued' | 'running'
   review_id: number | null
   disposition: string | null
+  human_disposition: string | null
+  hitl_reviewed: boolean
 }
 
 // GET /api/surveys — pull submitted surveys from QB, enrich with review status
@@ -88,6 +90,16 @@ export async function GET(req: NextRequest) {
       if (!reviewMap.has(r.qb_record_id)) reviewMap.set(r.qb_record_id, r)
     }
 
+    // 2b. Get HITL feedback for these reviews
+    const reviewIds = Array.from(reviewMap.values()).map(r => r.id)
+    const { data: feedbackData } = reviewIds.length > 0
+      ? await sb.from('feedback').select('review_id, human_disposition').in('review_id', reviewIds)
+      : { data: [] }
+    const feedbackMap = new Map<number, string>()
+    for (const f of (feedbackData || [])) {
+      if (f.human_disposition) feedbackMap.set(f.review_id, f.human_disposition)
+    }
+
     // 3. Get queue status from surveys table (queued, running, or error)
     const { data: queuedSurveys } = await sb
       .from('surveys')
@@ -121,6 +133,8 @@ export async function GET(req: NextRequest) {
         review_status: reviewStatus,
         review_id: review?.id || null,
         disposition: review?.disposition || null,
+        human_disposition: review ? (feedbackMap.get(review.id) || null) : null,
+        hitl_reviewed: review ? feedbackMap.has(review.id) : false,
       }
     })
 

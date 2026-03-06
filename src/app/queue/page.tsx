@@ -19,6 +19,8 @@ interface QueueSurvey {
   review_status: 'not_reviewed' | 'reviewed' | 'queued' | 'running'
   review_id: number | null
   disposition: string | null
+  human_disposition: string | null
+  hitl_reviewed: boolean
 }
 
 const APPROVAL_BADGE: Record<string, { icon: string; color: string; bg: string }> = {
@@ -275,8 +277,21 @@ export default function QueuePage() {
                         </td>
                         <td className="py-3 px-4">
                           {s.review_id ? (
-                            <Link href={`/reviews/${s.review_id}`}>
-                              <DispositionBadge disposition={s.disposition as DispositionType} />
+                            <Link href={`/reviews/${s.review_id}`} className="flex flex-col gap-1">
+                              {s.hitl_reviewed && s.human_disposition ? (
+                                <>
+                                  <span className="badge gap-1" style={{
+                                    background: s.human_disposition === 'approve' ? '#14532d' : s.human_disposition === 'reject' ? '#991b1b' : '#92400e',
+                                    color: s.human_disposition === 'approve' ? '#4ade80' : s.human_disposition === 'reject' ? '#f87171' : '#fbbf24',
+                                  }}>
+                                    <CheckCircle size={9} />
+                                    HITL: {s.human_disposition.charAt(0).toUpperCase() + s.human_disposition.slice(1)}
+                                  </span>
+                                  <span className="text-[10px] text-[#444]">Bot: {s.disposition}</span>
+                                </>
+                              ) : (
+                                <DispositionBadge disposition={s.disposition as DispositionType} />
+                              )}
                             </Link>
                           ) : (
                             <span className="text-[#333]">—</span>
