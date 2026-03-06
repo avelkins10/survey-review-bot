@@ -251,7 +251,9 @@ export default function QueuePage() {
                         </td>
                         <td className="py-3 px-4">
                           {s.survey_submitted_date ? (() => {
-                            const submitted = new Date(s.survey_submitted_date)
+                            // Parse as local date (QB returns YYYY-MM-DD with no time)
+                            const parts = s.survey_submitted_date.split('-')
+                            const submitted = new Date(+parts[0], +parts[1] - 1, +parts[2])
                             const ago = formatDistanceToNow(submitted, { addSuffix: true })
                             const hoursAgo = (Date.now() - submitted.getTime()) / (1000 * 60 * 60)
                             const ageColor = hoursAgo > 48 ? '#ef4444' : hoursAgo > 24 ? '#f59e0b' : '#555'
