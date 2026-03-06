@@ -4,8 +4,8 @@ import { usePathname } from 'next/navigation'
 
 const links = [
   { href: '/', label: 'Dashboard' },
+  { href: '/queue', label: 'Queue' },
   { href: '/reviews', label: 'Reviews' },
-  { href: '/trigger', label: 'Run Review' },
 ]
 
 export default function Nav() {
