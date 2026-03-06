@@ -8,6 +8,7 @@ import type { Review, PhotoResult, Feedback, DispositionType } from '@/lib/types
 import { ArrowLeft, ExternalLink, Camera, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 import Link from 'next/link'
 import PhotoAnnotator from '@/components/photo-annotator'
+import HITLFeedback from '@/components/hitl-feedback'
 
 const CATEGORY_LABELS: Record<string, string> = {
   panel_sticker: 'Panel Sticker', main_breaker: 'Main Breaker', utility_meter: 'Utility Meter',
@@ -33,15 +34,7 @@ export default function ReviewDetail() {
   const [annotations, setAnnotations] = useState<Record<number, { id?: number; verdict: string | null; bounding_boxes: unknown[]; notes: string | null }>>({})
   const [loading, setLoading] = useState(true)
 
-  // Feedback form
-  const [fbName, setFbName] = useState('')
-  const [fbDisp, setFbDisp] = useState('')
-  const [fbConf, setFbConf] = useState(3)
-  const [fbAICaught, setFbAICaught] = useState('')
-  const [fbHumanCaught, setFbHumanCaught] = useState('')
-  const [fbPatterns, setFbPatterns] = useState('')
-  const [fbSaving, setFbSaving] = useState(false)
-  const [fbSaved, setFbSaved] = useState(false)
+  // Feedback form state removed — now handled by HITLFeedback component
 
   useEffect(() => {
     fetch(`/api/reviews/${id}`).then(r => r.json()).then(d => {
@@ -60,25 +53,6 @@ export default function ReviewDetail() {
       }).catch(() => {})
     }).catch(() => setLoading(false))
   }, [id])
-
-  async function submitFeedback() {
-    setFbSaving(true)
-    await fetch('/api/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        review_id: Number(id),
-        reviewer_name: fbName,
-        human_disposition: fbDisp,
-        confidence_rating: fbConf,
-        ai_caught: fbAICaught,
-        human_caught: fbHumanCaught,
-        patterns: fbPatterns,
-      }),
-    })
-    setFbSaving(false)
-    setFbSaved(true)
-  }
 
   if (loading) return (
     <>
@@ -149,6 +123,12 @@ export default function ReviewDetail() {
             <div className="text-2xl font-bold text-[#f59e0b]">{review.quality_flags?.length || 0}</div>
           </div>
         </div>
+
+        {/* HITL Feedback — autosave, top of page */}
+        <HITLFeedback
+          reviewId={Number(id)}
+          existingFeedback={feedback.length > 0 ? feedback[0] : null}
+        />
 
         {/* Missing + action items */}
         <div className="grid md:grid-cols-2 gap-6 mb-8">
@@ -352,87 +332,7 @@ export default function ReviewDetail() {
           </div>
         )}
 
-        {/* Previous feedback */}
-        {feedback.length > 0 && (
-          <div className="card p-5 mb-8">
-            <h3 className="text-[10px] uppercase tracking-[2px] text-[#f97316] mb-3">Design Team Feedback</h3>
-            {feedback.map(fb => (
-              <div key={fb.id} className="border-b border-[#1a1a1a] pb-3 mb-3 last:border-0 last:mb-0">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="font-semibold text-sm">{fb.reviewer_name || 'Anonymous'}</span>
-                  <span className="badge" style={{
-                    background: fb.human_disposition === 'approve' ? '#14532d' : fb.human_disposition === 'reject' ? '#991b1b' : '#92400e',
-                    color: fb.human_disposition === 'approve' ? '#4ade80' : fb.human_disposition === 'reject' ? '#f87171' : '#fbbf24',
-                  }}>
-                    {fb.human_disposition || 'No call'}
-                  </span>
-                  <span className="text-[10px] text-[#444]">Conf: {fb.confidence_rating}/5</span>
-                </div>
-                {fb.human_caught && <p className="text-xs text-[#888] mb-1">🧠 Human caught: {fb.human_caught}</p>}
-                {fb.ai_caught && <p className="text-xs text-[#888] mb-1">🤖 AI caught: {fb.ai_caught}</p>}
-                {fb.patterns && <p className="text-xs text-[#888]">📝 Pattern: {fb.patterns}</p>}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Feedback form */}
-        {!fbSaved ? (
-          <div className="card p-5 mb-8 border-[#f97316]/20">
-            <h3 className="text-[10px] uppercase tracking-[2px] text-[#f97316] mb-4">Submit Feedback</h3>
-            <div className="grid md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="text-[10px] uppercase tracking-[2px] text-[#555] block mb-1">Your Name</label>
-                <input value={fbName} onChange={e => setFbName(e.target.value)} placeholder="e.g. Deven Smith" className="w-full" />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-[2px] text-[#555] block mb-1">Your Call</label>
-                <div className="flex gap-2 mt-1">
-                  {['approve', 'flag', 'reject'].map(d => (
-                    <button key={d} onClick={() => setFbDisp(d)}
-                      className={`px-3 py-1.5 rounded text-xs font-semibold border transition-colors ${
-                        fbDisp === d ? 'border-[#f97316] bg-[#f97316]/10 text-[#f97316]' : 'border-[#2a2a2a] text-[#555]'
-                      }`}>
-                      {d === 'approve' ? '✅' : d === 'reject' ? '❌' : '⚠️'} {d.charAt(0).toUpperCase() + d.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="text-[10px] uppercase tracking-[2px] text-[#555] block mb-1">
-                Confidence in AI (1=useless → 5=deploy)
-              </label>
-              <input type="range" min={1} max={5} value={fbConf} onChange={e => setFbConf(Number(e.target.value))}
-                className="accent-[#f97316]" />
-              <span className="ml-2 text-lg font-bold text-[#f97316]">{fbConf}</span>
-            </div>
-            <div className="grid md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="text-[10px] uppercase tracking-[2px] text-[#555] block mb-1">What AI caught that you&apos;d have missed</label>
-                <textarea value={fbAICaught} onChange={e => setFbAICaught(e.target.value)} rows={2} className="w-full" />
-              </div>
-              <div>
-                <label className="text-[10px] uppercase tracking-[2px] text-[#555] block mb-1">What you caught that AI missed</label>
-                <textarea value={fbHumanCaught} onChange={e => setFbHumanCaught(e.target.value)} rows={2} className="w-full" />
-              </div>
-            </div>
-            <div className="mb-4">
-              <label className="text-[10px] uppercase tracking-[2px] text-[#555] block mb-1">Patterns to learn</label>
-              <textarea value={fbPatterns} onChange={e => setFbPatterns(e.target.value)} rows={2} className="w-full"
-                placeholder="e.g. We don't need lumber grade stamps in FL" />
-            </div>
-            <button onClick={submitFeedback} disabled={fbSaving} className="btn-primary">
-              {fbSaving ? 'Saving...' : 'Submit Feedback'}
-            </button>
-          </div>
-        ) : (
-          <div className="card p-8 text-center mb-8">
-            <CheckCircle size={32} className="mx-auto text-[#22c55e] mb-3" />
-            <h3 className="font-bold text-lg text-[#22c55e]">Feedback Received</h3>
-            <p className="text-xs text-[#555] mt-1">Thanks — this helps the AI improve.</p>
-          </div>
-        )}
+        {/* Old feedback form removed — now using HITLFeedback component at top of page */}
 
         {/* Error */}
         {review.error && (
