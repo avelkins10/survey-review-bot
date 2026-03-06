@@ -6,6 +6,7 @@ const links = [
   { href: '/', label: 'Dashboard' },
   { href: '/queue', label: 'Queue' },
   { href: '/reviews', label: 'Reviews' },
+  { href: '/training', label: 'Training' },
 ]
 
 export default function Nav() {
