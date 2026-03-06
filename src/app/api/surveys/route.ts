@@ -79,10 +79,13 @@ export async function GET(req: NextRequest) {
       .from('reviews')
       .select('id, qb_record_id, disposition')
       .in('qb_record_id', qbIds)
+      .order('id', { ascending: false })
 
-    const reviewMap = new Map(
-      (reviews || []).map(r => [r.qb_record_id, r])
-    )
+    // Keep only the latest review per project (first in desc order)
+    const reviewMap = new Map<number, { id: number; qb_record_id: number; disposition: string }>()
+    for (const r of (reviews || [])) {
+      if (!reviewMap.has(r.qb_record_id)) reviewMap.set(r.qb_record_id, r)
+    }
 
     // 3. Get queue status from surveys table
     const { data: queuedSurveys } = await sb
@@ -109,7 +112,6 @@ export async function GET(req: NextRequest) {
         qb_record_id: qbId,
         customer_name: String(r[String(QB_FID.customer_name)]?.value || 'Unknown'),
         state: r[String(QB_FID.state)]?.value ? String(r[String(QB_FID.state)]?.value) : null,
-        survey_status: String(r[String(QB_FID.survey_status)]?.value || ''),
         project_status: r[String(QB_FID.project_status)]?.value ? String(r[String(QB_FID.project_status)]?.value) : null,
         arrivy_task_id: r[String(QB_FID.arrivy_task_id)]?.value ? String(r[String(QB_FID.arrivy_task_id)]?.value) : null,
         survey_submitted_date: r[String(QB_FID.survey_submitted_date)]?.value ? String(r[String(QB_FID.survey_submitted_date)]?.value) : null,
