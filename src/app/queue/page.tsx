@@ -13,6 +13,7 @@ interface QueueSurvey {
   customer_name: string
   state: string | null
   survey_status: string
+  project_status: string | null
   arrivy_task_id: string | null
   survey_submitted_date: string | null
   review_status: 'not_reviewed' | 'reviewed' | 'queued' | 'running'
@@ -32,6 +33,7 @@ export default function QueuePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState('Submitted')
+  const [projStatusFilter, setProjStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [triggeringId, setTriggeringId] = useState<number | null>(null)
 
@@ -80,13 +82,20 @@ export default function QueuePage() {
     setTriggeringId(null)
   }
 
-  const filtered = search
-    ? surveys.filter(s =>
-        s.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-        String(s.qb_record_id).includes(search) ||
-        (s.state || '').toLowerCase().includes(search.toLowerCase())
-      )
-    : surveys
+  // Collect unique project statuses for the dropdown
+  const projectStatuses = Array.from(new Set(surveys.map(s => s.project_status).filter(Boolean) as string[])).sort()
+
+  const filtered = surveys.filter(s => {
+    if (projStatusFilter !== 'all' && s.project_status !== projStatusFilter) return false
+    if (search) {
+      const q = search.toLowerCase()
+      return s.customer_name.toLowerCase().includes(q) ||
+        String(s.qb_record_id).includes(q) ||
+        (s.state || '').toLowerCase().includes(q) ||
+        (s.project_status || '').toLowerCase().includes(q)
+    }
+    return true
+  })
 
   const counts = {
     total: surveys.length,
@@ -148,6 +157,16 @@ export default function QueuePage() {
               </button>
             ))}
           </div>
+          <select
+            value={projStatusFilter}
+            onChange={e => setProjStatusFilter(e.target.value)}
+            className="text-xs py-1.5 px-2 ml-2"
+          >
+            <option value="all">All Project Statuses</option>
+            {projectStatuses.map(ps => (
+              <option key={ps} value={ps}>{ps}</option>
+            ))}
+          </select>
           <div className="relative flex-1 max-w-xs ml-auto">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#444]" />
             <input
@@ -187,6 +206,7 @@ export default function QueuePage() {
                     <th className="text-left py-3 px-4">Customer</th>
                     <th className="text-left py-3 px-4">State</th>
                     <th className="text-left py-3 px-4">QB Status</th>
+                    <th className="text-left py-3 px-4">Project Status</th>
                     <th className="text-left py-3 px-4">Submitted</th>
                     <th className="text-left py-3 px-4">Review Status</th>
                     <th className="text-left py-3 px-4">Result</th>
@@ -204,6 +224,11 @@ export default function QueuePage() {
                         <td className="py-3 px-4 text-[#888]">{s.state || '—'}</td>
                         <td className="py-3 px-4">
                           <span className="tag">{s.survey_status}</span>
+                        </td>
+                        <td className="py-3 px-4">
+                          {s.project_status ? (
+                            <span className="tag">{s.project_status}</span>
+                          ) : <span className="text-[#333]">—</span>}
                         </td>
                         <td className="py-3 px-4">
                           {s.survey_submitted_date ? (() => {

@@ -17,6 +17,7 @@ const QB_FID = {
   survey_status: 162,
   survey_submitted_date: 164,
   state: 189,
+  project_status: 347,
   arrivy_task_id: 2685,
 }
 
@@ -25,6 +26,7 @@ interface QBSurvey {
   customer_name: string
   state: string | null
   survey_status: string
+  project_status: string | null
   arrivy_task_id: string | null
   survey_submitted_date: string | null
   review_status: 'not_reviewed' | 'reviewed' | 'queued' | 'running'
@@ -108,6 +110,7 @@ export async function GET(req: NextRequest) {
         customer_name: String(r[String(QB_FID.customer_name)]?.value || 'Unknown'),
         state: r[String(QB_FID.state)]?.value ? String(r[String(QB_FID.state)]?.value) : null,
         survey_status: String(r[String(QB_FID.survey_status)]?.value || ''),
+        project_status: r[String(QB_FID.project_status)]?.value ? String(r[String(QB_FID.project_status)]?.value) : null,
         arrivy_task_id: r[String(QB_FID.arrivy_task_id)]?.value ? String(r[String(QB_FID.arrivy_task_id)]?.value) : null,
         survey_submitted_date: r[String(QB_FID.survey_submitted_date)]?.value ? String(r[String(QB_FID.survey_submitted_date)]?.value) : null,
         review_status: reviewStatus,
