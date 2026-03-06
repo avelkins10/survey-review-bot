@@ -8,6 +8,12 @@ const sb = createClient(
 
 // POST /api/reviews — Python bot pushes review results here
 export async function POST(req: NextRequest) {
+  // Verify shared secret from Python bot
+  const secret = req.headers.get('x-bot-secret')
+  if (secret !== process.env.BOT_SECRET) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const body = await req.json()
 
