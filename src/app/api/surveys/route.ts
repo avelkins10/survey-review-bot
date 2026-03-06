@@ -88,15 +88,15 @@ export async function GET(req: NextRequest) {
       if (!reviewMap.has(r.qb_record_id)) reviewMap.set(r.qb_record_id, r)
     }
 
-    // 3. Get queue status from surveys table
+    // 3. Get queue status from surveys table (queued, running, or error)
     const { data: queuedSurveys } = await sb
       .from('surveys')
       .select('qb_record_id, survey_status')
       .in('qb_record_id', qbIds)
-      .eq('survey_status', 'queued_for_analysis')
+      .in('survey_status', ['queued_for_analysis', 'running', 'error'])
 
     const queueMap = new Map(
-      (queuedSurveys || []).map(q => [q.qb_record_id, 'pending'])
+      (queuedSurveys || []).map(q => [q.qb_record_id, q.survey_status])
     )
 
     // 4. Build response
@@ -106,7 +106,8 @@ export async function GET(req: NextRequest) {
       const queueStatus = queueMap.get(qbId)
 
       let reviewStatus: QBSurvey['review_status'] = 'not_reviewed'
-      if (queueStatus === 'pending') reviewStatus = 'queued'
+      if (queueStatus === 'running') reviewStatus = 'running'
+      else if (queueStatus === 'queued_for_analysis') reviewStatus = 'queued'
       else if (review) reviewStatus = 'reviewed'
 
       return {
