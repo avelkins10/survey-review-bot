@@ -253,15 +253,20 @@ export default function QueuePage() {
                         </td>
                         <td className="py-3 px-4">
                           {s.survey_submitted_date ? (() => {
-                            // Parse as local date (QB returns YYYY-MM-DD with no time)
-                            const parts = s.survey_submitted_date.split('-')
-                            const submitted = new Date(+parts[0], +parts[1] - 1, +parts[2])
+                            // QB returns ISO date string (YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss)
+                            // Parse via Date constructor which handles both formats as UTC-aware
+                            const raw = s.survey_submitted_date
+                            // Force date-only strings to parse as local midnight, not UTC midnight
+                            const submitted = raw.includes('T')
+                              ? new Date(raw)
+                              : new Date(raw + 'T00:00:00')
+                            if (isNaN(submitted.getTime())) return <span className="text-[#333]">—</span>
                             const ago = formatDistanceToNow(submitted, { addSuffix: true })
-                            const hoursAgo = (Date.now() - submitted.getTime()) / (1000 * 60 * 60)
-                            const ageColor = hoursAgo > 48 ? '#ef4444' : hoursAgo > 24 ? '#f59e0b' : '#555'
+                            const daysAgo = (Date.now() - submitted.getTime()) / (1000 * 60 * 60 * 24)
+                            const ageColor = daysAgo > 7 ? '#ef4444' : daysAgo > 3 ? '#f59e0b' : '#555'
                             return (
-                              <div className="flex flex-col">
-                                <span className="text-xs text-[#888]">{submitted.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-xs text-[#888]">{submitted.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                 <span className="text-[10px] font-medium flex items-center gap-1" style={{ color: ageColor }}>
                                   <Timer size={9} />{ago}
                                 </span>
@@ -269,9 +274,9 @@ export default function QueuePage() {
                             )
                           })() : <span className="text-[#333]">—</span>}
                         </td>
-                        <td className="py-3 px-4">
-                          <span className="badge gap-1" style={{ background: sc.bg, color: sc.color }}>
-                            <Icon size={10} className={s.review_status === 'running' || s.review_status === 'queued' ? 'animate-spin' : ''} />
+                        <td className="py-2 px-4">
+                          <span className="badge gap-1 leading-none" style={{ background: sc.bg, color: sc.color, lineHeight: 1, paddingTop: 3, paddingBottom: 3 }}>
+                            <Icon size={9} className={s.review_status === 'running' || s.review_status === 'queued' ? 'animate-spin' : ''} />
                             {sc.label}
                           </span>
                         </td>
